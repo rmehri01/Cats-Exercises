@@ -2,7 +2,6 @@ package sandbox.functor
 
 import cats._
 import cats.implicits._
-import sandbox.introduction.Printable
 
 object Main extends App {
   // Tree exercise
@@ -18,7 +17,7 @@ object Main extends App {
   println(Tree.branch(Tree.leaf(10), Tree.leaf(20)).map(_ * 2))
 
   // Contramap exercise
-  def format[A](value: A)(implicit p: Printable[A]) =
+  def format[A](value: A)(implicit p: Printable[A]): String =
     p.format(value)
 
   implicit val stringPrintable: Printable[String] =
@@ -32,8 +31,9 @@ object Main extends App {
 
   final case class Box[A](value: A)
 
-  implicit def boxPrintable[A]: Printable[Box[A]] =
-    new Printable[Box[A]] {
-      override def format(value: Box[A]): String = Printable[A]
-    }
+  implicit def boxPrintable[A](implicit p: Printable[A]): Printable[Box[A]] =
+    p.contramap[Box[A]](_.value)
+
+  println(format(Box("testing")))
+  println(format(Box(false)))
 }
