@@ -1,7 +1,7 @@
 package sandbox.monad
 
 import cats.Eval
-import cats.data.Writer
+import cats.data.{Reader, Writer}
 import cats.implicits._
 
 import scala.concurrent.{Await, Future}
@@ -111,4 +111,40 @@ object Main extends App {
       }
       _ <- Vector(s"fact $n $ans").tell
     } yield ans
+
+  // Reader exercise
+  case class Db(usernames: Map[Int, String], passwords: Map[String, String])
+  type DbReader[A] = Reader[Db, A]
+
+  def findUsername(userId: Int): DbReader[Option[String]] =
+    Reader(db => db.usernames.get(userId))
+  def checkPassword(username: String, password: String): DbReader[Boolean] =
+    Reader(db => db.passwords.get(username).contains(password))
+
+  def checkLogin(userId: Int, password: String): DbReader[Boolean] =
+    findUsername(userId).flatMap(_ match {
+      case Some(value) => checkPassword(value, password)
+      case None        => false.pure[DbReader]
+    })
+
+  val users = Map(1 -> "dade", 2 -> "kate", 3 -> "margo")
+  val passwords =
+    Map("dade" -> "zerocool", "kate" -> "acidburn", "margo" -> "secret")
+  val db = Db(users, passwords)
+  println(checkLogin(1, "zerocool").run(db))
+  println(checkLogin(4, "davinci").run(db))
+
+  // their solution with for comprehension
+  def checkLoginWithFor(userId: Int, password: String): DbReader[Boolean] =
+    for {
+      username <- findUsername(userId)
+      passwordOk <- username
+        .map { username =>
+          checkPassword(username, password)
+        }
+        .getOrElse {
+          false.pure[DbReader]
+        }
+    } yield passwordOk
+
 }
