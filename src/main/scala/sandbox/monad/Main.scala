@@ -147,4 +147,57 @@ object Main extends App {
         }
     } yield passwordOk
 
+  // State exercise
+  import cats.data.State
+
+  type CalcState[A] = State[List[Int], A]
+
+  def evalOne(sym: String): CalcState[Int] = sym match {
+    case "+" => operator(_ + _)
+    case "-" => operator(_ - _)
+    case "*" => operator(_ * _)
+    case "/" => operator(_ / _)
+    case num => operand(num.toInt)
+  }
+
+  def operand(num: Int) = State[List[Int], Int] { oldStack =>
+    val newStack = num :: oldStack
+    (newStack, num)
+  }
+
+  def operator(function: (Int, Int) => Int) = State[List[Int], Int] {
+    case b :: a :: tail =>
+      val result = function(a, b)
+      (result :: tail, result)
+    case _ =>
+      sys.error("Failed computation!")
+  }
+
+  val program = for {
+    _ <- evalOne("1")
+    _ <- evalOne("2")
+    ans <- evalOne("+")
+  } yield ans
+  println(program.runA(Nil).value)
+
+  def evalAll(input: List[String]): CalcState[Int] = {
+    val calcStateList = input.map(evalOne)
+    calcStateList.reduce((acc, nextState) => acc.flatMap(_ => nextState))
+  }
+
+  val program2 = evalAll(List("1", "2", "+", "3", "*"))
+  println(program2.runA(Nil).value)
+
+  // their solution
+  def evalAllSol(input: List[String]): CalcState[Int] =
+    input.foldLeft(0.pure[CalcState]) { (a, b) =>
+      a.flatMap(_ => evalOne(b))
+    }
+
+  def evalInput(input: String): Int = {
+    val symbols = input.split(" ").toList
+    evalAll(symbols).runA(Nil).value
+  }
+
+  println(evalInput("1 2 + 3 * 5 +"))
 }
