@@ -1,8 +1,9 @@
 package sandbox.monad
 
-import cats.Eval
+import cats.{Eval, Functor}
 import cats.data.{Reader, Writer}
 import cats.implicits._
+import sandbox.functor.{Branch, Leaf, Tree}
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -146,5 +147,87 @@ object Main extends App {
           false.pure[DbReader]
         }
     } yield passwordOk
+
+  // State exercise
+  import cats.data.State
+
+  type CalcState[A] = State[List[Int], A]
+
+  def evalOne(sym: String): CalcState[Int] = sym match {
+    case "+" => operator(_ + _)
+    case "-" => operator(_ - _)
+    case "*" => operator(_ * _)
+    case "/" => operator(_ / _)
+    case num => operand(num.toInt)
+  }
+
+  def operand(num: Int) = State[List[Int], Int] { oldStack =>
+    val newStack = num :: oldStack
+    (newStack, num)
+  }
+
+  def operator(function: (Int, Int) => Int) = State[List[Int], Int] {
+    case b :: a :: tail =>
+      val result = function(a, b)
+      (result :: tail, result)
+    case _ =>
+      sys.error("Failed computation!")
+  }
+
+  val program = for {
+    _ <- evalOne("1")
+    _ <- evalOne("2")
+    ans <- evalOne("+")
+  } yield ans
+  println(program.runA(Nil).value)
+
+  def evalAll(input: List[String]): CalcState[Int] = {
+    val calcStateList = input.map(evalOne)
+    calcStateList.reduce((acc, nextState) => acc.flatMap(_ => nextState))
+  }
+
+  val program2 = evalAll(List("1", "2", "+", "3", "*"))
+  println(program2.runA(Nil).value)
+
+  // their solution
+  def evalAllSol(input: List[String]): CalcState[Int] =
+    input.foldLeft(0.pure[CalcState]) { (a, b) =>
+      a.flatMap(_ => evalOne(b))
+    }
+
+  def evalInput(input: String): Int = {
+    val symbols = input.split(" ").toList
+    evalAll(symbols).runA(Nil).value
+  }
+
+  println(evalInput("1 2 + 3 * 5 +"))
+
+  // custom monad exercise
+  import cats.Monad
+
+  implicit val treeMonad = new Monad[Tree] {
+    override def pure[A](a: A): Tree[A] = Leaf(a)
+
+    override def flatMap[A, B](value: Tree[A])(func: A => Tree[B]): Tree[B] =
+      value match {
+        case Branch(left, right) =>
+          Branch(flatMap(left)(func), flatMap(right)(func))
+        case Leaf(value) => func(value)
+      }
+
+    override def tailRecM[A, B](a: A)(f: A => Tree[Either[A, B]]): Tree[B] =
+      flatMap(f(a)) {
+        case Left(value)  => tailRecM(value)(f)
+        case Right(value) => Leaf(value)
+      }
+  }
+
+  // from functor exercise
+  implicit val treeFunctor: Functor[Tree] = new Functor[Tree] {
+    override def map[A, B](fa: Tree[A])(f: A => B): Tree[B] = fa match {
+      case Branch(left, right) => Branch(map(left)(f), map(right)(f))
+      case Leaf(value)         => Leaf(f(value))
+    }
+  }
 
 }
