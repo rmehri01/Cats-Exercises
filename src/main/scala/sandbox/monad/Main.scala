@@ -1,8 +1,9 @@
 package sandbox.monad
 
-import cats.Eval
+import cats.{Eval, Functor}
 import cats.data.{Reader, Writer}
 import cats.implicits._
+import sandbox.functor.{Branch, Leaf, Tree}
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -200,4 +201,33 @@ object Main extends App {
   }
 
   println(evalInput("1 2 + 3 * 5 +"))
+
+  // custom monad exercise
+  import cats.Monad
+
+  implicit val treeMonad = new Monad[Tree] {
+    override def pure[A](a: A): Tree[A] = Leaf(a)
+
+    override def flatMap[A, B](value: Tree[A])(func: A => Tree[B]): Tree[B] =
+      value match {
+        case Branch(left, right) =>
+          Branch(flatMap(left)(func), flatMap(right)(func))
+        case Leaf(value) => func(value)
+      }
+
+    override def tailRecM[A, B](a: A)(f: A => Tree[Either[A, B]]): Tree[B] =
+      flatMap(f(a)) {
+        case Left(value)  => tailRecM(value)(f)
+        case Right(value) => Leaf(value)
+      }
+  }
+
+  // from functor exercise
+  implicit val treeFunctor: Functor[Tree] = new Functor[Tree] {
+    override def map[A, B](fa: Tree[A])(f: A => B): Tree[B] = fa match {
+      case Branch(left, right) => Branch(map(left)(f), map(right)(f))
+      case Leaf(value)         => Leaf(f(value))
+    }
+  }
+
 }
