@@ -1,11 +1,24 @@
 package sandbox.casestudies.datavalidation
 
-import cats.data.{NonEmptyList, Validated}
+import cats.data.{Kleisli, NonEmptyList}
 import cats.implicits._
 
 object Main extends App {
 
   type Errors = NonEmptyList[String]
+
+  type Result[A] = Either[Errors, A]
+
+  type Check[A, B] = Kleisli[Result, A, B]
+
+  // Create a check from a function:
+  def check[A, B](func: A => Result[B]): Check[A, B] =
+    Kleisli(func)
+
+  // Create a check from a Predicate:
+  def checkPred[A](pred: Predicate[Errors, A]): Check[A, A] =
+    Kleisli[Result, A, A](pred.run)
+
   def error(s: String): NonEmptyList[String] =
     NonEmptyList(s, Nil)
 
@@ -32,30 +45,28 @@ object Main extends App {
       str => str.filter(c => c == char).size == 1
     )
 
-  val splitEmail: Check[Errors, String, (String, String)] = Check(str => {
+  val splitEmail: Check[String, (String, String)] = check(str => {
     val splitArr = str.split("@")
     splitArr match {
-      case Array(name, domain) => (name, domain).valid
-      case _                   => error("Email must contain a single @ character").invalid
+      case Array(name, domain) => (name, domain).asRight
+      case _                   => error("Email must contain a single @ character").asLeft
     }
   })
 
-  val joinEmail: Check[Errors, (String, String), String] =
-    Check[Errors, (String, String), String] {
+  val joinEmail: Check[(String, String), String] =
+    check[(String, String), String] {
       case (name, domain) =>
         (checkName(name), checkDomain(domain)).mapN(_ + "@" + _)
     }
 
-  val checkName = Check(longerThan(0))
+  val checkName = checkPred(longerThan(0))
 
-  val checkDomain = Check(longerThan(2) and containsOnce('.'))
+  val checkDomain = checkPred(longerThan(2) and containsOnce('.'))
 
-  val checkEmail: Check[Errors, String, String] = splitEmail andThen joinEmail
+  val checkEmail = splitEmail andThen joinEmail
 
-  val checkUsername: Check[Errors, String, String] = Check(
-    longerThan(3) and alphanumeric
-  )
-  
+  val checkUsername = checkPred(longerThan(3) and alphanumeric)
+
   println(checkUsername("a"))
   println(checkUsername("foobar"))
   println(checkUsername(".';'"))
@@ -67,6 +78,6 @@ object Main extends App {
   println(checkEmail("h@co"))
 
   final case class User(username: String, email: String)
-  def createUser(username: String, email: String): Validated[Errors, User] =
+  def createUser(username: String, email: String): Result[User] =
     (checkUsername(username), checkEmail(email)).mapN(User)
 }
