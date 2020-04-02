@@ -6,9 +6,11 @@ import cats.data.Validated.Invalid
 import cats.implicits._
 
 sealed trait Predicate[E, A] {
+  import Predicate._
+
   def apply(value: A)(implicit s: Semigroup[E]): Validated[E, A] =
     this match {
-      case Single(f) => f(value)
+      case Pure(f) => f(value)
 
       case And(left, right) =>
         val res1 = left(value)
@@ -31,10 +33,17 @@ sealed trait Predicate[E, A] {
     Or(this, that)
 }
 
-final case class Single[E, A](f: A => Validated[E, A]) extends Predicate[E, A]
+object Predicate {
+  final case class Pure[E, A](f: A => Validated[E, A]) extends Predicate[E, A]
 
-final case class And[E, A](left: Predicate[E, A], right: Predicate[E, A])
-    extends Predicate[E, A]
+  final case class And[E, A](left: Predicate[E, A], right: Predicate[E, A])
+      extends Predicate[E, A]
 
-final case class Or[E, A](left: Predicate[E, A], right: Predicate[E, A])
-    extends Predicate[E, A]
+  final case class Or[E, A](left: Predicate[E, A], right: Predicate[E, A])
+      extends Predicate[E, A]
+
+  def apply[E, A](f: A => Validated[E, A]): Predicate[E, A] = Pure(f)
+
+  def lift[E, A](err: E, f: A => Boolean): Predicate[E, A] =
+    Pure(a => if (f(a)) a.valid else err.invalid)
+}
