@@ -1,6 +1,6 @@
 package sandbox.casestudies.mapreduce
 
-import cats.{Foldable, Monoid}
+import cats.Monoid
 import cats.implicits._
 
 import scala.concurrent.{Await, Future}
