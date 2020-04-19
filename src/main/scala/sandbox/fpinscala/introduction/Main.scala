@@ -1,11 +1,11 @@
-package sandbox.fpinscala
+package sandbox.fpinscala.introduction
 
 import scala.annotation.tailrec
 
 object Main {
   def main(args: Array[String]): Unit = {
     println((0 to 10).map(fib))
-    println(isSorted[Int](Array(1, 2, 3), _ < _))
+    println(isSorted(Array(1, 2, 3))(_ < _))
   }
 
   def fib(n: Int): Int = {
@@ -18,9 +18,9 @@ object Main {
   }
 
   @tailrec
-  def isSorted[A](as: Array[A], ordered: (A, A) => Boolean): Boolean =
+  def isSorted[A](as: Array[A])(ordered: (A, A) => Boolean): Boolean =
     if (as.length < 2) true
-    else ordered(as(0), as(1)) && isSorted(as.tail, ordered)
+    else ordered(as(0), as(1)) && isSorted(as.tail)(ordered)
 
   def curry[A, B, C](f: (A, B) => C): A => B => C =
     a => b => f(a, b)
