@@ -122,5 +122,8 @@ object Main {
     println(flatMap(List(1, 2, 3))(i => List(i, i)))
     println(addLists(List(1, 2, 3), List(4, 5, 6, 7)))
     println(hasSubsequence(List(1, 2, 3, 4), List(2, 3)))
+
+    val t = Branch(Leaf(1), Branch(Leaf(2), Leaf(3)))
+    println(Tree.maximum(t))
   }
 }
