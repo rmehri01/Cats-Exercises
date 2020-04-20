@@ -9,6 +9,11 @@ object Main {
     println(stream.headOption)
     println((stream append stream).toList)
     println(stream.map(_ + 100).toList)
+    println((stream zipAll stream.append(stream)).toList)
+    println(stream startsWith Empty)
+    println(stream startsWith stream.append(stream))
+    println(stream.tails.map(_.toList).toList)
+    println(stream.scanRight(0)(_ + _).toList)
   }
 
 }

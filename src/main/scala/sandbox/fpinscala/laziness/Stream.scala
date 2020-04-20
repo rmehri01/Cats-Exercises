@@ -15,9 +15,8 @@ sealed trait Stream[+A] {
 //      case _                   => empty
 //    }
     unfold[A, (Stream[A], Int)]((this, n)) {
-      case (s, num) =>
-        if (num <= 0) None
-        else s.headOption.map(a => (a, (s.drop(1), num - 1)))
+      case (Cons(h, t), num) if num > 0 => Some((h(), (t(), num - 1)))
+      case _                            => None
     }
 
   @annotation.tailrec
@@ -32,7 +31,12 @@ sealed trait Stream[+A] {
 //      case Cons(h, t) if p(h()) => cons(h(), t().takeWhile(p))
 //      case _                    => empty
 //    }
-    foldRight(empty[A])((a, b) => if (p(a)) cons(a, b) else empty)
+
+//    foldRight(empty[A])((a, b) => if (p(a)) cons(a, b) else empty)
+    unfold[A, Stream[A]](this) {
+      case Cons(h, t) if p(h()) => Some((h(), t()))
+      case _                    => None
+    }
 
   def foldRight[B](z: => B)(f: (A, => B) => B): B = this match {
     case Cons(h, t) => f(h(), t().foldRight(z)(f))
@@ -50,7 +54,10 @@ sealed trait Stream[+A] {
 
   def map[B](f: A => B): Stream[B] =
 //    foldRight(empty[B])((a, b) => cons(f(a), b))
-    unfold[B, Stream[A]](this)(s => s.headOption.map(a => (f(a), s.drop(1))))
+    unfold[B, Stream[A]](this) {
+      case Empty      => None
+      case Cons(h, t) => Some((f(h()), t()))
+    }
 
   def filter(f: A => Boolean): Stream[A] =
     foldRight(empty[A])((a, b) => if (f(a)) cons(a, b) else b)
@@ -61,7 +68,42 @@ sealed trait Stream[+A] {
   def flatMap[B](f: A => Stream[B]): Stream[B] =
     foldRight(empty[B])((a, b) => f(a) append b)
 
-  def zipAll[B](s2: Stream[B]): Stream[(Option[A], Option[B])] = ???
+  def zipWith[B, C](that: Stream[B])(f: (A, B) => C): Stream[C] =
+    unfold[C, (Stream[A], Stream[B])]((this, that)) {
+      case (Cons(h1, t1), Cons(h2, t2)) => Some((f(h1(), h2()), (t1(), t2())))
+      case _                            => None
+    }
+
+  def zipAll[B](s2: Stream[B]): Stream[(Option[A], Option[B])] =
+    unfold[(Option[A], Option[B]), (Stream[A], Stream[B])]((this, s2)) {
+      case (Empty, Empty)        => None
+      case (Cons(h1, t1), Empty) => Some(((Some(h1()), None), (t1(), empty)))
+      case (Empty, Cons(h2, t2)) => Some(((None, Some(h2())), (empty, t2())))
+      case (Cons(h1, t1), Cons(h2, t2)) =>
+        Some(((Some(h1()), Some(h2())), (t1(), t2())))
+    }
+
+  def startsWith[B >: A](s: Stream[B]): Boolean =
+    this.zipAll(s).takeWhile(_._2.isDefined).forall {
+      case (o1, o2) => o1 == o2
+    }
+
+  def tails: Stream[Stream[A]] =
+    unfold[Stream[A], Stream[A]](this) {
+      case Empty          => None
+      case s @ Cons(_, t) => Some((s, t()))
+    } append Stream(empty)
+
+  def hasSubsequence[B >: A](s: Stream[B]): Boolean =
+    tails exists (_ startsWith s)
+
+  def scanRight[B](z: B)(f: (A, B) => B): Stream[B] =
+    this match {
+      case Empty => Stream(z)
+      case Cons(h, t) =>
+        val tail = t().scanRight(z)(f)
+        cons(f(h(), tail.headOption.getOrElse(z)), tail)
+    }
 }
 case object Empty extends Stream[Nothing]
 case class Cons[+A](h: () => A, t: () => Stream[A]) extends Stream[A]
