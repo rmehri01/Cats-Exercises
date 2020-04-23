@@ -52,6 +52,54 @@ object RNG {
 
     loop(count, rng, Nil)
   }
+
+  type Rand[+A] = RNG => (A, RNG)
+
+  def map[A, B](s: Rand[A])(f: A => B): Rand[B] = rng => {
+    val (a, rng2) = s(rng)
+    (f(a), rng2)
+  }
+
+  def doubleElegant: Rand[Double] =
+    map(nonNegativeInt)(i => i.toDouble / Int.MaxValue)
+
+  def map2[A, B, C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] =
+    rng => {
+      val (a, r1) = ra(rng)
+      val (b, r2) = rb(r1)
+
+      (f(a, b), r2)
+    }
+
+  def unit[A](a: A): Rand[A] = rng => (a, rng)
+
+  def sequence[A](fs: List[Rand[A]]): Rand[List[A]] =
+    fs.foldRight[Rand[List[A]]](unit(Nil)) {
+      case (ra, ras) => map2(ra, ras)(_ :: _)
+    }
+
+  def intsSequenced(count: Int): Rand[List[Int]] =
+    sequence[Int](List.fill(count)(rng => rng.nextInt))
+
+  def flatMap[A, B](f: Rand[A])(g: A => Rand[B]): Rand[B] =
+    rng => {
+      val (a, r) = f(rng)
+      g(a)(r)
+    }
+
+  def nonNegativeLessThan(n: Int): Rand[Int] =
+    flatMap(nonNegativeInt) { i =>
+      val mod = i % n
+      if (i + (n - 1) - mod >= 0) unit(mod) else nonNegativeLessThan(n)
+    }
+
+  def mapWithFlatMap[A, B](s: Rand[A])(f: A => B): Rand[B] =
+    flatMap(s)(a => unit(f(a)))
+
+  def map2WithFlatMap[A, B, C](ra: Rand[A],
+                               rb: Rand[B])(f: (A, B) => C): Rand[C] =
+    flatMap(ra)(a => map(rb)(b => f(a, b)))
+
 }
 
 case class SimpleRNG(seed: Long) extends RNG {

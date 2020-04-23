@@ -8,5 +8,6 @@ object Main {
     println(nonNegativeInt(rng))
     println(double(rng))
     println(ints(10)(rng))
+    println(intsSequenced(10)(rng))
   }
 }
