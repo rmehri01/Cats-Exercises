@@ -96,4 +96,36 @@ object Par {
   def delay[A](fa: => Par[A]): Par[A] =
     es => fa(es)
 
+  def choice[A](cond: Par[Boolean])(t: Par[A], f: Par[A]): Par[A] =
+//    choiceN(map(cond)(if (_) 1 else 0))(List(f, t))
+    chooser(cond)(if (_) t else f)
+
+  def choiceN[A](n: Par[Int])(choices: List[Par[A]]): Par[A] =
+//    es => {
+//      val i = run(es)(n).get
+//      run(es)(choices(i))
+//    }
+    chooser(n)(choices(_))
+
+  def choiceMap[K, V](key: Par[K])(choices: Map[K, Par[V]]): Par[V] =
+//    es => {
+//      val k = run(es)(key).get
+//      run(es)(choices(k))
+//    }
+    chooser(key)(choices(_))
+
+  // same as flatMap or bind for sequencing computations
+  def chooser[A, B](pa: Par[A])(choices: A => Par[B]): Par[B] =
+    es => {
+      val a = run(es)(pa).get
+      run(es)(choices(a))
+    }
+
+  def flatMap[A, B](pa: Par[A])(choices: A => Par[B]): Par[B] =
+    join(map(pa)(choices))
+
+  def join[A](a: Par[Par[A]]): Par[A] =
+    es => run(es)(run(es)(a).get())
+
+  
 }
