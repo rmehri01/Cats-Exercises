@@ -2,6 +2,8 @@ package sandbox.fpinscala.laziness
 
 import Stream._
 
+import scala.annotation.tailrec
+
 sealed trait Stream[+A] {
   def toList: List[A] =
     this match {
@@ -74,6 +76,9 @@ sealed trait Stream[+A] {
       case _                            => None
     }
 
+  def zip[B](s2: Stream[B]): Stream[(A, B)] =
+    zipWith(s2)((_, _))
+
   def zipAll[B](s2: Stream[B]): Stream[(Option[A], Option[B])] =
     unfold[(Option[A], Option[B]), (Stream[A], Stream[B])]((this, s2)) {
       case (Empty, Empty)        => None
@@ -104,6 +109,12 @@ sealed trait Stream[+A] {
         val tail = t().scanRight(z)(f)
         cons(f(h(), tail.headOption.getOrElse(z)), tail)
     }
+
+  @tailrec
+  final def find(f: A => Boolean): Option[A] = this match {
+    case Empty      => None
+    case Cons(h, t) => if (f(h())) Some(h()) else t().find(f)
+  }
 }
 case object Empty extends Stream[Nothing]
 case class Cons[+A](h: () => A, t: () => Stream[A]) extends Stream[A]
