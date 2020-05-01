@@ -5,10 +5,30 @@ import sandbox.fpinscala.functionalstate.RNG
 
 import sandbox.fpinscala.laziness.Stream
 
-case class Prop(run: (TestCases, RNG) => Result) {
+case class Prop(run: (MaxSize, TestCases, RNG) => Result) {
   def check: Either[(FailedCase, SuccessCount), SuccessCount] = ???
 
-  def forAll[A](as: Gen[A])(f: A => Boolean): Prop = Prop { (n, rng) =>
+  def forAll[A](g: SGen[A])(f: A => Boolean): Prop =
+    forAll(g(_))(f)
+
+  def forAll[A](g: Int => Gen[A])(f: A => Boolean): Prop = Prop {
+    (max, n, rng) =>
+      val casesPerSize = (n + (max - 1)) / max
+      val props: Stream[Prop] =
+        Stream.from(0).take((n min max) + 1).map(i => forAll(g(i))(f))
+      val prop: Prop = props
+        .map(
+          p =>
+            Prop { (max, _, rng) =>
+              p.run(max, casesPerSize, rng)
+          }
+        )
+        .toList
+        .reduce(_ && _)
+      prop.run(max, n, rng)
+  }
+
+  def forAll[A](as: Gen[A])(f: A => Boolean): Prop = Prop { (_, n, rng) =>
     randomStream(as)(rng)
       .zip(Stream.from(0))
       .take(n)
@@ -22,29 +42,30 @@ case class Prop(run: (TestCases, RNG) => Result) {
       .getOrElse(Passed)
   }
 
-  def tag(msg: String) = Prop { (n, rng) =>
-    run(n, rng) match {
+  def tag(msg: String): Prop = Prop { (maxSize, n, rng) =>
+    run(maxSize, n, rng) match {
       case Falsified(e, c) => Falsified(msg + "\n" + e, c)
       case x               => x
     }
   }
 
-  def &&(p: Prop): Prop = Prop { (n, rng) =>
-    run(n, rng) match {
-      case Passed => p.run(n, rng)
+  def &&(p: Prop): Prop = Prop { (maxSize, n, rng) =>
+    run(maxSize, n, rng) match {
+      case Passed => p.run(maxSize, n, rng)
       case x      => x
     }
   }
 
-  def ||(p: Prop): Prop = Prop { (n, rng) =>
-    run(n, rng) match {
-      case Falsified(failure, _) => p.tag(failure).run(n, rng)
+  def ||(p: Prop): Prop = Prop { (maxSize, n, rng) =>
+    run(maxSize, n, rng) match {
+      case Falsified(failure, _) => p.tag(failure).run(maxSize, n, rng)
       case Passed                => Passed
     }
   }
 }
 
 object Prop {
+  type MaxSize = Int
   type FailedCase = String
   type TestCases = Int
   type SuccessCount = Int

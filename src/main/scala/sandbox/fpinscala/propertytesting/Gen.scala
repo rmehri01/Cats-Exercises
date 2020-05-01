@@ -2,16 +2,21 @@ package sandbox.fpinscala.propertytesting
 
 import sandbox.fpinscala.functionalstate.{RNG, State}
 
-case class Gen[A](sample: State[RNG, A]) {
+case class Gen[+A](sample: State[RNG, A]) {
 
   def flatMap[B](f: A => Gen[B]): Gen[B] =
     Gen(sample.flatMap(a => f(a).sample))
+
+  def map[B](f: A => B): Gen[B] =
+    Gen(sample.map(f))
 
   def listOfN(n: Int): Gen[List[A]] =
     Gen.listOfN(n, this)
 
   def listOfN(size: Gen[Int]): Gen[List[A]] =
     size.flatMap(n => this.listOfN(n))
+
+  def unsized: SGen[A] = SGen(_ => this)
 }
 
 object Gen {
@@ -38,5 +43,6 @@ object Gen {
     Gen(State(RNG.double)).flatMap(d => if (d < threshold) gen1 else gen2)
   }
 
-
+  def listOf[A](g: Gen[A]): SGen[List[A]] =
+    SGen(n => g.listOfN(n))
 }
