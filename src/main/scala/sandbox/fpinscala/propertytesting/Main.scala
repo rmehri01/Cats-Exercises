@@ -2,6 +2,7 @@ package sandbox.fpinscala.propertytesting
 
 import Prop._
 import Gen._
+import sandbox.fpinscala.parallel.Par
 
 object Main {
   def main(args: Array[String]): Unit = {
@@ -24,5 +25,13 @@ object Main {
       sorted.forall(ns.contains(_))
     }
     run(sortProp)
+
+    val mapProp = checkPar { equal(Par.map(Par.unit(1))(_ + 1), Par.unit(2)) }
+    run(mapProp)
+
+    val pInt = Gen.choose(Int.MinValue, Int.MaxValue).map(Par.unit)
+    val forkProp =
+      forAllPar(pInt)(x => equal(Par.fork(x), x))
+    run(forkProp)
   }
 }
