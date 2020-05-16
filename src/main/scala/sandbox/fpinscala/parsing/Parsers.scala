@@ -2,6 +2,7 @@ package sandbox.fpinscala.parsing
 
 import sandbox.fpinscala.propertytesting._
 import Prop._
+import javax.swing.JToolBar.Separator
 
 import scala.util.matching.Regex
 
@@ -47,6 +48,11 @@ trait Parsers[ParseError, Parser[+ _]] { self =>
 
   def flatMap[A, B](p: Parser[A])(f: A => Parser[B]): Parser[B]
 
+  def *>[A, B](pa: Parser[A], pb: Parser[B]): Parser[B]
+  def <*[A, B](pa: Parser[A], pb: Parser[B]): Parser[A]
+
+  def sepBy[A, B](sep: Parser[A], element: Parser[B]): Parser[List[B]]
+
   implicit def string(s: String): Parser[String]
   implicit def operators[A](p: Parser[A]): ParserOps[A] = ParserOps[A](p)
   implicit def asStringParser[A](a: A)(
@@ -64,6 +70,9 @@ trait Parsers[ParseError, Parser[+ _]] { self =>
     def **[B](pb: => Parser[B]): Parser[(A, B)] = self.product(p, pb)
     def many1: Parser[List[A]] = self.many1(p)
     def flatMap[B](f: A => Parser[B]): Parser[B] = self.flatMap(p)(f)
+    def *>[B](pb: Parser[B]): Parser[B] = self.*>(p, pb)
+    def <*[B](pb: Parser[B]): Parser[A] = self.<*(p, pb)
+    def sepBy[B](sep: Parser[B]): Parser[List[A]] = self.sepBy(sep, p)
   }
 
   object Laws {
