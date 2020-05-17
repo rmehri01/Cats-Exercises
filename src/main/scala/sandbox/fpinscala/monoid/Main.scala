@@ -38,9 +38,26 @@ object Main {
     override val zero: Option[A] = None
   }
 
+  def dual[A](m: Monoid[A]): Monoid[A] = new Monoid[A] {
+    def op(x: A, y: A): A = m.op(y, x)
+    val zero: A = m.zero
+  }
+
   def endoMonoid[A]: Monoid[A => A] = new Monoid[A => A] {
     override def op(a1: A => A, a2: A => A): A => A = a1 compose a2
     override def zero: A => A = identity
   }
+
+  def concatenate[A](as: List[A], m: Monoid[A]): A =
+    as.foldLeft(m.zero)(m.op)
+
+  def foldMap[A, B](as: List[A], m: Monoid[B])(f: A => B): B =
+    as.foldLeft(m.zero)((b, a) => m.op(b, f(a)))
+
+  def foldRightViaFoldMap[A, B](as: List[A])(z: B)(f: (A, B) => B): B =
+    foldMap[A, B => B](as, endoMonoid)(f.curried)(z)
+
+  def foldLeftViaFoldMap[A, B](as: List[A])(z: B)(f: (B, A) => B): B =
+    foldMap(as, dual(endoMonoid[B]))(a => b => f(b, a))(z)
 
 }
