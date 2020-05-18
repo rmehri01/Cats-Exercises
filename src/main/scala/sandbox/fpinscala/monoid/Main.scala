@@ -60,4 +60,71 @@ object Main {
   def foldLeftViaFoldMap[A, B](as: List[A])(z: B)(f: (B, A) => B): B =
     foldMap(as, dual(endoMonoid[B]))(a => b => f(b, a))(z)
 
+  def foldMapV[A, B](v: IndexedSeq[A], m: Monoid[B])(f: A => B): B =
+    if (v.isEmpty) m.zero
+    else if (v.length == 1) f(v.head)
+    else {
+      val (l, r) = v.splitAt(v.length / 2)
+      m.op(foldMapV(l, m)(f), foldMapV(r, m)(f))
+    }
+
+  import sandbox.fpinscala.parallel.Par._
+
+  def par[A](m: Monoid[A]): Monoid[Par[A]] =
+    new Monoid[Par[A]] {
+      override def op(a1: Par[A], a2: Par[A]): Par[A] =
+        map2(a1, a2)(m.op)
+
+      override def zero: Par[A] =
+        unit(m.zero)
+    }
+
+  def ordered(ints: IndexedSeq[Int]): Boolean = {
+    val m = new Monoid[Option[(Int, Int, Boolean)]] {
+      override def op(o1: Option[(Int, Int, Boolean)],
+                      o2: Option[(Int, Int, Boolean)]) =
+        (o1, o2) match {
+          case (Some((x1, y1, p)), Some((x2, y2, q))) =>
+            Some((x1 min x2, y1 max y2, p && q && y1 <= x2))
+          case (x, None) => x
+          case (None, x) => x
+        }
+
+      override val zero = None
+    }
+
+    foldMapV(ints, m)(i => Some((i, i, true))).forall(_._3)
+  }
+
+  sealed trait WC
+  case class Stub(chars: String) extends WC
+  case class Part(lStub: String, words: Int, rStub: String) extends WC
+
+  val wcMonoid: Monoid[WC] = new Monoid[WC] {
+    override def op(a1: WC, a2: WC): WC = (a1, a2) match {
+      case (Stub(s1), Stub(s2))     => Stub(s1 + s2)
+      case (Part(l, n, r), Stub(s)) => Part(l, n, r + s)
+      case (Stub(s), Part(l, n, r)) => Part(l + s, n, r)
+      case (Part(l1, n1, r1), Part(l2, n2, r2)) =>
+        Part(l1, n1 + n2 + (if ((r1 + l2).isEmpty) 0 else 1), r2)
+    }
+
+    override def zero: WC = Stub("")
+  }
+
+  def count(s: String): Int = {
+    def wc(c: Char): WC =
+      if (c.isWhitespace)
+        Part("", 0, "")
+      else
+        Stub(c.toString)
+    
+    def unstub(s: String) = if (s.isEmpty) 0 else 1
+
+    foldMapV(s.toIndexedSeq, wcMonoid)(wc) match {
+      case Stub(s)       => unstub(s)
+      case Part(l, w, r) => unstub(l) + w + unstub(r)
+    }
+  }
+
 }
