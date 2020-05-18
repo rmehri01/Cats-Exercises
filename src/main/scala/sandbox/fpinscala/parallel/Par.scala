@@ -93,6 +93,12 @@ object Par {
     sequence(ps.flatten)
   }
 
+  def parMap[A,B](as: List[A])(f: A => B): Par[List[B]] =
+    sequence(as.map(asyncF(f)))
+
+  def parMap[A,B](as: IndexedSeq[A])(f: A => B): Par[IndexedSeq[B]] =
+    sequenceBalanced(as.map(asyncF(f)))
+
   def delay[A](fa: => Par[A]): Par[A] =
     es => fa(es)
 
