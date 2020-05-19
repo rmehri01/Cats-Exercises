@@ -43,6 +43,12 @@ trait Monad[F[_]] extends Functor[F] {
 
   def flatMapViaCompose[A, B](ma: F[A])(f: A => F[B]): F[B] =
     compose((_: Unit) => ma, f)(())
+
+  def join[A](mma: F[F[A]]): F[A] =
+    flatMap(mma)(identity)
+
+  def flatMapViaJoinAndMap[A, B](ma: F[A])(f: A => F[B]): F[B] =
+    join(map(ma)(f))
 }
 
 object Monad {
@@ -94,5 +100,12 @@ object Monad {
       ma: State[S, A]
     )(f: A => State[S, B]): State[S, B] =
       ma.flatMap(f)
+  }
+
+  val idMonad: Monad[Id] = new Monad[Id] {
+    override def unit[A](a: => A): Id[A] = Id(a)
+
+    override def flatMap[A, B](ma: Id[A])(f: A => Id[B]): Id[B] =
+      ma flatMap f
   }
 }

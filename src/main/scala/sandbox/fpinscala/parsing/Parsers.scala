@@ -60,6 +60,8 @@ trait Parsers[Parser[+ _]] { self =>
 
   def attempt[A](p: Parser[A]): Parser[A]
 
+  import scala.language.implicitConversions
+
   implicit def string(s: String): Parser[String]
   implicit def operators[A](p: Parser[A]): ParserOps[A] = ParserOps[A](p)
   implicit def asStringParser[A](a: A)(
