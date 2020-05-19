@@ -24,6 +24,25 @@ trait Monad[F[_]] extends Functor[F] {
 
   def replicateM[A](n: Int, ma: F[A]): F[List[A]] =
     sequence(List.fill(n)(ma))
+
+  def product[A, B](ma: F[A], mb: F[B]): F[(A, B)] =
+    map2(ma, mb)((_, _))
+
+  def filterM[A](ms: List[A])(f: A => F[Boolean]): F[List[A]] =
+    ms match {
+      case Nil => unit(Nil)
+      case a :: as =>
+        flatMap(f(a))(bool => {
+          val r = filterM(as)(f)
+          if (!bool) r else map(r)(a :: _)
+        })
+    }
+
+  def compose[A, B, C](f: A => F[B], g: B => F[C]): A => F[C] =
+    a => flatMap(f(a))(g)
+
+  def flatMapViaCompose[A, B](ma: F[A])(f: A => F[B]): F[B] =
+    compose((_: Unit) => ma, f)(())
 }
 
 object Monad {
