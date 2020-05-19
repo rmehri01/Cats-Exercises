@@ -2,17 +2,14 @@ package sandbox.fpinscala.parsing
 
 import sandbox.fpinscala.propertytesting._
 import Prop._
-import javax.swing.JToolBar.Separator
 
 import scala.util.matching.Regex
 
-trait Parsers[ParseError, Parser[+ _]] { self =>
+trait Parsers[Parser[+ _]] { self =>
   def run[A](p: Parser[A])(input: String): Either[ParseError, A]
 
   def char(c: Char): Parser[Char] =
     string(c.toString).map(_.charAt(0))
-
-  def orString(s1: String, s2: String): Parser[String]
 
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] = {
     @annotation.tailrec
@@ -48,10 +45,20 @@ trait Parsers[ParseError, Parser[+ _]] { self =>
 
   def flatMap[A, B](p: Parser[A])(f: A => Parser[B]): Parser[B]
 
-  def *>[A, B](pa: Parser[A], pb: Parser[B]): Parser[B]
-  def <*[A, B](pa: Parser[A], pb: Parser[B]): Parser[A]
+  def skipL[A, B](pa: Parser[A], pb: => Parser[B]): Parser[B] =
+    map2(pa.slice, pb)((_, b) => b)
 
-  def sepBy[A, B](sep: Parser[A], element: Parser[B]): Parser[List[B]]
+  def skipR[A, B](pa: Parser[A], pb: => Parser[B]): Parser[A] =
+    map2(pa, pb.slice)((a, _) => a)
+
+  def sepBy[A, B](element: Parser[A], sep: Parser[B]): Parser[List[A]] =
+    map2(element, (sep *> element).many)(_ :: _) | succeed(Nil)
+
+  def label[A](msg: String)(p: Parser[A]): Parser[A]
+
+  def scope[A](msg: String)(p: Parser[A]): Parser[A]
+
+  def attempt[A](p: Parser[A]): Parser[A]
 
   implicit def string(s: String): Parser[String]
   implicit def operators[A](p: Parser[A]): ParserOps[A] = ParserOps[A](p)
@@ -70,9 +77,9 @@ trait Parsers[ParseError, Parser[+ _]] { self =>
     def **[B](pb: => Parser[B]): Parser[(A, B)] = self.product(p, pb)
     def many1: Parser[List[A]] = self.many1(p)
     def flatMap[B](f: A => Parser[B]): Parser[B] = self.flatMap(p)(f)
-    def *>[B](pb: Parser[B]): Parser[B] = self.*>(p, pb)
-    def <*[B](pb: Parser[B]): Parser[A] = self.<*(p, pb)
-    def sepBy[B](sep: Parser[B]): Parser[List[A]] = self.sepBy(sep, p)
+    def *>[B](pb: => Parser[B]): Parser[B] = self.skipL(p, pb)
+    def <*[B](pb: => Parser[B]): Parser[A] = self.skipR(p, pb)
+    def sepBy[B](sep: Parser[B]): Parser[List[A]] = self.sepBy(p, sep)
   }
 
   object Laws {
@@ -90,4 +97,17 @@ trait Parsers[ParseError, Parser[+ _]] { self =>
     def unbiasL[A, B, C](p: ((A, B), C)): (A, B, C) = (p._1._1, p._1._2, p._2)
     def unbiasR[A, B, C](p: (A, (B, C))): (A, B, C) = (p._1, p._2._1, p._2._2)
   }
+}
+
+case class ParseError(stack: List[(Location, String)])
+
+case class Location(input: String, offset: Int = 0) {
+  lazy val line: Int = input.slice(0, offset + 1).count(_ == '\n') + 1
+  lazy val col: Int = input.slice(0, offset + 1).lastIndexOf('\n') match {
+    case -1        => offset + 1
+    case lineStart => offset - lineStart
+  }
+
+  def toError(msg: String): ParseError =
+    ParseError(List((this, msg)))
 }
