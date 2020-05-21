@@ -56,6 +56,11 @@ trait Applicative[F[_]] extends Functor[F] { self =>
         self.unit(G.unit(a))
     }
 
+  def sequenceMap[K, V](ofa: Map[K, F[V]]): F[Map[K, V]] =
+    ofa.foldLeft(unit(Map[K, V]())) {
+      case (acc, (k, fv)) => map2(acc, fv)((m, v) => m + (k -> v))
+    }
+
   // showing these can be implemented in terms of each other
   // either unit and apply or unit and map2 can be primitive
   def apply[A, B](fab: F[A => B])(fa: F[A]): F[B] =
