@@ -97,4 +97,13 @@ object Monad {
     override def flatMap[A, B](ma: Id[A])(f: A => Id[B]): Id[B] =
       ma flatMap f
   }
+
+  def eitherMonad[E]: Monad[Either[E, ?]] = new Monad[Either[E, ?]] {
+    override def unit[A](a: => A): Either[E, A] = Right(a)
+
+    override def flatMap[A, B](
+      ma: Either[E, A]
+    )(f: A => Either[E, B]): Either[E, B] =
+      ma flatMap f
+  }
 }
