@@ -1,6 +1,6 @@
 package sandbox.fpinscala.monad
 
-import sandbox.fpinscala.applicative.Applicative
+import sandbox.fpinscala.applicative.{Applicative, Traverse}
 import sandbox.fpinscala.functionalstate.State
 import sandbox.fpinscala.parallel.Par.Par
 import sandbox.fpinscala.parallel.Par
@@ -38,6 +38,17 @@ trait Monad[F[_]] extends Applicative[F] {
 
   def flatMapViaJoinAndMap[A, B](ma: F[A])(f: A => F[B]): F[B] =
     join(map(ma)(f))
+
+  def composeM[G[_], H[_]](implicit G: Monad[G],
+                           H: Monad[H],
+                           T: Traverse[H]): Monad[Lambda[x => G[H[x]]]] =
+    new Monad[Lambda[x => G[H[x]]]] {
+      override def unit[A](a: => A): G[H[A]] = G.unit(H.unit(a))
+
+      override def flatMap[A, B](ma: G[H[A]])(f: A => G[H[B]]): G[H[B]] =
+        G.flatMap(ma)(ga => G.map(T.traverse(ga)(f))(H.join))
+    }
+
 }
 
 object Monad {
