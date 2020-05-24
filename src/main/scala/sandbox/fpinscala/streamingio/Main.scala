@@ -4,7 +4,8 @@ import Process._
 
 object Main {
   def main(args: Array[String]): Unit = {
-    val s = mean(Stream(1.0, 2.0, 3.0, 4.0)).toList
-    println(s)
+    val stream = Stream(1.0, 2.0, 3.0, 4.0)
+    println(mean.zipWithIndex(stream).toList)
+    println(exists((_: Double) % 3 == 0)(stream).toList)
   }
 }

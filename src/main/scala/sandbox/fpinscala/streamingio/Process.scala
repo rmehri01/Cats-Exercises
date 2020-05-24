@@ -1,5 +1,8 @@
 package sandbox.fpinscala.streamingio
 
+import Process._
+import sandbox.fpinscala.monad.Monad
+
 sealed trait Process[I, O] {
   def apply(s: Stream[I]): Stream[O] = this match {
     case Halt() => Stream()
@@ -36,6 +39,24 @@ sealed trait Process[I, O] {
           case Await(g)         => Await(i => g(i) |> p2)
         }
     }
+
+  def map[O2](f: O => O2): Process[I, O2] = this |> lift(f)
+
+  def ++(p: => Process[I, O]): Process[I, O] = this match {
+    case Halt()      => p
+    case Emit(h, t)  => Emit(h, t ++ p)
+    case Await(recv) => Await(recv andThen (_ ++ p))
+  }
+
+  def flatMap[O2](f: O => Process[I, O2]): Process[I, O2] = this match {
+    case Halt()      => Halt()
+    case Emit(h, t)  => f(h) ++ t.flatMap(f)
+    case Await(recv) => Await(recv andThen (_ flatMap f))
+  }
+
+  def zipWithIndex: Process[I, (O, Int)] =
+    zip(this, count map (_ - 1))
+
 }
 
 case class Emit[I, O](head: O, tail: Process[I, O] = Halt[I, O]())
@@ -104,7 +125,7 @@ object Process {
 
   def count[I]: Process[I, Int] = {
     def go(acc: Int): Process[I, Int] =
-      await(i => emit(acc + 1, go(acc + 1)))
+      await(_ => emit(acc + 1, go(acc + 1)))
 
     go(0)
   }
@@ -131,4 +152,47 @@ object Process {
   def countViaLoop[I]: Process[I, Int] =
     loop(0)((_, s) => (s + 1, s + 1))
 
+  def monad[I]: Monad[Process[I, ?]] =
+    new Monad[Process[I, ?]] {
+      def unit[O](o: => O): Process[I, O] = Emit(o)
+
+      def flatMap[O, O2](
+        p: Process[I, O]
+      )(f: O => Process[I, O2]): Process[I, O2] =
+        p flatMap f
+    }
+
+  def meanViaZip: Process[Double, Double] =
+    zip[Double, Double, Int](sum, count).map { case (s, n) => s / n }
+
+  def zip[A, B, C](p1: Process[A, B], p2: Process[A, C]): Process[A, (B, C)] =
+    (p1, p2) match {
+      case (Halt(), _) | (_, Halt())  => Halt()
+      case (Emit(b, t1), Emit(c, t2)) => Emit((b, c), zip(t1, t2))
+      case (Await(recv1), _) =>
+        Await((oa: Option[A]) => zip(recv1(oa), feed(oa)(p2)))
+      case (_, Await(recv2)) =>
+        Await((oa: Option[A]) => zip(feed(oa)(p1), recv2(oa)))
+    }
+
+  def feed[A, B](oa: Option[A])(p: Process[A, B]): Process[A, B] =
+    p match {
+      case Halt()      => p
+      case Emit(h, t)  => Emit(h, feed(oa)(t))
+      case Await(recv) => recv(oa)
+    }
+
+  def exists[I](f: I => Boolean): Process[I, Boolean] =
+    lift(f) |> any
+
+  def any: Process[Boolean, Boolean] =
+    loop(false)((i, s) => (i || s, i || s))
+
+  def convertFahrenheit: Process[String,String] =
+    filter((line: String) => !line.startsWith("#")) |>
+      filter(line => line.trim.nonEmpty) |>
+      lift(line => toCelsius(line.toDouble).toString)
+
+  def toCelsius(fahrenheit: Double): Double =
+    (5.0 / 9.0) * (fahrenheit - 32.0)
 }
